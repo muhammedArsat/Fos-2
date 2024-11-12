@@ -1,0 +1,126 @@
+---
+- name: Deploy Full Stack Task Manager Application
+  hosts: local
+  vars:
+    base_dir: "/home/vishnu/vscodeWorkspace/acedamics/foss/task-graphql"
+    backend_dir: "{{ base_dir }}"
+    frontend_dir: "{{ base_dir }}/task-manager-frontend"
+    node_path: "/home/vishnu/.nvm/versions/node/v20.16.0/bin"
+    user: "vishnu"
+    
+  tasks:
+    # Backend Setup
+    - name: Install backend dependencies
+      command: "{{ node_path }}/npm install"
+      args:
+        chdir: "{{ backend_dir }}"
+      become: yes
+      become_user: "{{ user }}"
+
+    - name: Create backend systemd user service directory
+      file:
+        path: "/home/{{ user }}/.config/systemd/user"
+        state: directory
+        mode: '0755'
+      become: yes
+      become_user: "{{ user }}"
+
+    - name: Create backend systemd user service file
+      copy:
+        dest: "/home/{{ user }}/.config/systemd/user/graphql-backend.service"
+        content: |
+          [Unit]
+          Description=GraphQL Backend Service
+          After=network.target
+
+          [Service]
+          Type=simple
+          Environment=PATH={{ node_path }}:$PATH
+          WorkingDirectory={{ backend_dir }}
+          ExecStart={{ node_path }}/node index.js
+          Restart=on-failure
+          Environment=PORT=4000
+
+          [Install]
+          WantedBy=default.target
+        mode: '0644'
+      become: yes
+      become_user: "{{ user }}"
+
+    # Frontend Setup
+    - name: Install frontend dependencies
+      command: "{{ node_path }}/npm install"
+      args:
+        chdir: "{{ frontend_dir }}"
+      become: yes
+      become_user: "{{ user }}"
+
+    - name: Build frontend
+      command: "{{ node_path }}/npm run build"
+      args:
+        chdir: "{{ frontend_dir }}"
+      become: yes
+      become_user: "{{ user }}"
+
+    - name: Install serve globally
+      command: "{{ node_path }}/npm install -g serve"
+      become: yes
+      become_user: "{{ user }}"
+
+    - name: Create frontend systemd user service file
+      copy:
+        dest: "/home/{{ user }}/.config/systemd/user/react-frontend.service"
+        content: |
+          [Unit]
+          Description=React Frontend Service
+          After=graphql-backend.service
+
+          [Service]
+          Type=simple
+          Environment=PATH={{ node_path }}:$PATH
+          WorkingDirectory={{ frontend_dir }}/dist
+          ExecStart={{ node_path }}/serve -s . -l 3000
+          Restart=on-failure
+          Environment=PORT=3000
+
+          [Install]
+          WantedBy=default.target
+        mode: '0644'
+      become: yes
+      become_user: "{{ user }}"
+
+    # Service Management
+    - name: Reload systemd user daemon
+      command: systemctl --user daemon-reload
+      become: yes
+      become_user: "{{ user }}"
+
+    - name: Enable and start backend service
+      command: "{{ item }}"
+      loop:
+        - "systemctl --user enable graphql-backend"
+        - "systemctl --user start graphql-backend"
+      become: yes
+      become_user: "{{ user }}"
+
+    - name: Enable and start frontend service
+      command: "{{ item }}"
+      loop:
+        - "systemctl --user enable react-frontend"
+        - "systemctl --user start react-frontend"
+      become: yes
+      become_user: "{{ user }}"
+
+    - name: Enable lingering for user service
+      command: "loginctl enable-linger {{ user }}"
+      become: yes
+
+    - name: Wait for services to start
+      wait_for:
+        timeout: 10
+
+    - name: Display service URLs
+      debug:
+        msg:
+          - "Backend is running at: http://localhost:4000/graphql"
+          - "Frontend is running at: http://localhost:3000"
