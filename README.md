@@ -10,3 +10,6 @@ Exp 4 :
 Exp 5:
 
 same as like exp 4
+
+
+if Postman is not available use Thunderclient extension in vs code
