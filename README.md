@@ -1,3 +1,6 @@
+IP ADDRESS : 10.40.26.150:3000
+
+
 Exp 4 :
   frontend: (inside task-manager-frontend folder)
   1.npm i
